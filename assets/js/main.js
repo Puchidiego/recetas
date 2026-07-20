@@ -1,6 +1,59 @@
 // Recetario Saludable — interacciones de la landing
 
+// Datos de la Storefront API de Shopify (mismos que genera el canal "Buy Button")
+const SHOPIFY_STORE = {
+  domain: 'sptts0-38.myshopify.com',
+  storefrontAccessToken: '5c8483eb071ba5b33197ead5ffc7f228',
+  apiVersion: '2025-04',
+  variantId: 'gid://shopify/ProductVariant/42752491126869',
+};
+
+// Crea un checkout nuevo en Shopify y redirige ahí (mismo comportamiento que
+// el botón "Buy now" -> "checkout" del canal Buy Button, con nuestro propio diseño).
+async function redirectToCheckout(triggerEl) {
+  const originalLabel = triggerEl.textContent;
+  triggerEl.setAttribute('aria-busy', 'true');
+  triggerEl.textContent = 'Redirigiendo…';
+
+  try {
+    const response = await fetch(
+      `https://${SHOPIFY_STORE.domain}/api/${SHOPIFY_STORE.apiVersion}/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Storefront-Access-Token': SHOPIFY_STORE.storefrontAccessToken,
+        },
+        body: JSON.stringify({
+          query: `mutation { cartCreate(input: { lines: [{ merchandiseId: "${SHOPIFY_STORE.variantId}", quantity: 1 }] }) { cart { checkoutUrl } userErrors { message } } }`,
+        }),
+      }
+    );
+    const json = await response.json();
+    const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
+
+    if (checkoutUrl) {
+      window.location.href = checkoutUrl;
+      return;
+    }
+  } catch (error) {
+    // sigue al fallback de abajo
+  }
+
+  // Fallback si la API falla: manda a la página del producto
+  triggerEl.textContent = originalLabel;
+  triggerEl.removeAttribute('aria-busy');
+  window.location.href = triggerEl.getAttribute('href') || 'https://bibliodecontenido.com/productos/recetas-sanas';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-buy]').forEach((el) => {
+    el.addEventListener('click', (event) => {
+      event.preventDefault();
+      redirectToCheckout(el);
+    });
+  });
+
   // Menú móvil
   const menuToggle = document.getElementById('menuToggle');
   const mainNav = document.getElementById('mainNav');
